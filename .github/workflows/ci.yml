@@ -1,0 +1,336 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+  REGISTRY: ghcr.io/zingzy
+  BACKEND_IMAGE: ghcr.io/zingzy/incident-tracker-backend
+  FRONTEND_IMAGE: ghcr.io/zingzy/incident-tracker-frontend
+  BANDIT_VERSION: 1.9.4
+  PIP_AUDIT_VERSION: 2.10.1
+  GITLEAKS_VERSION: 8.30.1
+  TRIVY_VERSION: 0.75.0
+
+jobs:
+  backend-test:
+    name: Backend build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements-dev.txt
+
+      - name: Compile and check the dependency tree
+        working-directory: backend
+        run: |
+          python -m compileall -q app alembic
+          pip check
+
+      - name: Run pytest
+        working-directory: backend
+        run: pytest -v
+
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install and build
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          ls -la dist dist/assets
+
+  sast:
+    name: SAST (Bandit)
+    needs: [backend-test, frontend-build]
+    runs-on: ubuntu-latest
+    outputs:
+      high: ${{ steps.bandit.outputs.high }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Bandit
+        run: pip install "bandit==${BANDIT_VERSION}"
+
+      - name: Scan the backend source
+        id: bandit
+        run: |
+          bandit -c security/bandit.yaml -r backend -f json -o bandit.json --exit-zero
+          jq -r '.results[] | "\(.issue_severity)\t\(.test_id)\t\(.filename):\(.line_number)\t\(.issue_text)"' bandit.json
+          jq -r '.metrics._totals | "totals: high=\(."SEVERITY.HIGH") medium=\(."SEVERITY.MEDIUM") low=\(."SEVERITY.LOW") loc=\(.loc)"' bandit.json
+          high=$(jq '[.results[] | select(.issue_severity == "HIGH")] | length' bandit.json)
+          echo "high=$high" >> "$GITHUB_OUTPUT"
+          echo "Bandit HIGH severity findings: $high" >> "$GITHUB_STEP_SUMMARY"
+
+  sca:
+    name: SCA (pip-audit, npm audit)
+    needs: [backend-test, frontend-build]
+    runs-on: ubuntu-latest
+    outputs:
+      vulns: ${{ steps.audit.outputs.vulns }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pip-audit
+        run: pip install "pip-audit==${PIP_AUDIT_VERSION}"
+
+      - name: Audit Python and npm dependencies
+        id: audit
+        run: |
+          pip-audit -r backend/requirements-dev.txt -f json -o pip-audit.json --progress-spinner off || true
+          jq -r '.dependencies[] | select(.vulns | length > 0) | .name as $n | .version as $v | .vulns[] | "pip  \($n) \($v)\t\(.id)\tfix: \(.fix_versions | join(","))"' pip-audit.json | sort -u
+          py=$(jq '[.dependencies[] | .name as $n | .vulns[] | "\($n) \(.id)"] | unique | length' pip-audit.json)
+          echo "pip-audit: $(jq '.dependencies | length' pip-audit.json) packages, $py known vulnerabilities"
+
+          cd frontend
+          npm audit --package-lock-only --json > ../npm-audit.json || true
+          cd ..
+          jq -r '.vulnerabilities // {} | to_entries[] | "npm  \(.key)\t\(.value.severity)"' npm-audit.json
+          js=$(jq '[.vulnerabilities // {} | to_entries[] | select(.value.severity == "high" or .value.severity == "critical")] | length' npm-audit.json)
+          echo "npm audit: $js high or critical"
+
+          echo "vulns=$((py + js))" >> "$GITHUB_OUTPUT"
+          echo "pip-audit known vulnerabilities: $py, npm audit high or critical: $js" >> "$GITHUB_STEP_SUMMARY"
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    needs: [backend-test, frontend-build]
+    runs-on: ubuntu-latest
+    outputs:
+      leaks: ${{ steps.gitleaks.outputs.leaks }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        working-directory: ${{ runner.temp }}
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSLO "$base/$tarball"
+          curl -fsSLO "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep " $tarball\$" "gitleaks_${GITLEAKS_VERSION}_checksums.txt" | sha256sum -c -
+          tar -xzf "$tarball" gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+
+      - name: Scan the working tree and every commit that touched this folder
+        id: gitleaks
+        run: |
+          gitleaks dir . --config security/gitleaks.toml --redact --no-banner --verbose \
+            --exit-code 0 --report-format json --report-path "$RUNNER_TEMP/tree.json"
+          gitleaks git . --log-opts="-- ." --config security/gitleaks.toml --redact --no-banner --verbose \
+            --exit-code 0 --report-format json --report-path "$RUNNER_TEMP/history.json"
+          leaks=$(( $(jq length "$RUNNER_TEMP/tree.json") + $(jq length "$RUNNER_TEMP/history.json") ))
+          echo "leaks=$leaks" >> "$GITHUB_OUTPUT"
+          echo "gitleaks findings (tree + history): $leaks" >> "$GITHUB_STEP_SUMMARY"
+
+  docker-build:
+    name: Docker build
+    needs: [sast, sca, secret-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build both images tagged with the commit SHA
+        run: |
+          labels=(--label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}"
+                  --label "org.opencontainers.image.revision=${{ github.sha }}")
+          docker build "${labels[@]}" -t "$BACKEND_IMAGE:${{ github.sha }}" backend
+          docker build "${labels[@]}" -t "$FRONTEND_IMAGE:${{ github.sha }}" frontend
+          docker image ls --filter "reference=$REGISTRY/*"
+          docker save "$BACKEND_IMAGE:${{ github.sha }}" "$FRONTEND_IMAGE:${{ github.sha }}" -o "$RUNNER_TEMP/images.tar"
+
+      - name: Hand the exact images to the next jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: images
+          path: ${{ runner.temp }}/images.tar
+          retention-days: 1
+
+  image-scan:
+    name: Image scan (Trivy)
+    needs: docker-build
+    runs-on: ubuntu-latest
+    outputs:
+      vulns: ${{ steps.trivy.outputs.vulns }}
+      secrets: ${{ steps.trivy.outputs.secrets }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: images
+          path: ${{ runner.temp }}
+
+      - name: Install Trivy
+        working-directory: ${{ runner.temp }}
+        run: |
+          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          tarball="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSLO "$base/$tarball"
+          curl -fsSLO "$base/trivy_${TRIVY_VERSION}_checksums.txt"
+          grep " $tarball\$" "trivy_${TRIVY_VERSION}_checksums.txt" | sha256sum -c -
+          tar -xzf "$tarball" trivy
+          sudo install trivy /usr/local/bin/trivy
+
+      - name: Scan both images for HIGH and CRITICAL CVEs and secrets
+        id: trivy
+        run: |
+          docker load -i "$RUNNER_TEMP/images.tar"
+          vulns=0; secrets=0
+          for image in "$BACKEND_IMAGE" "$FRONTEND_IMAGE"; do
+            name=$(basename "$image")
+            trivy image --config security/trivy.yaml --format json --output "trivy-$name.json" --no-progress "$image:${{ github.sha }}"
+            echo "== $name"
+            trivy convert --format table --scanners vuln,secret "trivy-$name.json"
+            v=$(jq '[.Results[]?.Vulnerabilities[]?] | length' "trivy-$name.json")
+            s=$(jq '[.Results[]?.Secrets[]?] | length' "trivy-$name.json")
+            echo "$name: $(jq -r '.Metadata.OS | "\(.Family) \(.Name)"' "trivy-$name.json"), $v HIGH/CRITICAL vulnerabilities, $s secrets" | tee -a "$GITHUB_STEP_SUMMARY"
+            vulns=$((vulns + v)); secrets=$((secrets + s))
+          done
+          echo "vulns=$vulns" >> "$GITHUB_OUTPUT"
+          echo "secrets=$secrets" >> "$GITHUB_OUTPUT"
+
+  security-gate:
+    name: Security gate
+    if: ${{ !cancelled() }}
+    needs: [sast, sca, secret-scan, image-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Block on any HIGH/CRITICAL finding or any secret
+        run: |
+          security/gate.sh \
+            "SAST, Bandit HIGH=${{ needs.sast.result }} ${{ needs.sast.outputs.high }}" \
+            "SCA, pip-audit + npm audit=${{ needs.sca.result }} ${{ needs.sca.outputs.vulns }}" \
+            "Secrets, gitleaks=${{ needs.secret-scan.result }} ${{ needs.secret-scan.outputs.leaks }}" \
+            "Images, Trivy HIGH/CRITICAL=${{ needs.image-scan.result }} ${{ needs.image-scan.outputs.vulns }}" \
+            "Images, Trivy secrets=${{ needs.image-scan.result }} ${{ needs.image-scan.outputs.secrets }}"
+
+  push:
+    name: Push images to GHCR
+    needs: security-gate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: images
+          path: ${{ runner.temp }}
+
+      - name: Log in to GHCR
+        working-directory: ${{ runner.temp }}
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Push the images that were scanned
+        working-directory: ${{ runner.temp }}
+        run: |
+          docker load -i images.tar
+          for image in "$BACKEND_IMAGE" "$FRONTEND_IMAGE"; do
+            docker push "$image:${{ github.sha }}"
+            echo "pushed $(docker inspect --format '{{index .RepoDigests 0}}' "$image:${{ github.sha }}")" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+
+  deploy:
+    name: Deploy to Kubernetes (kind) with Helm
+    needs: push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create a kind cluster in the runner
+        uses: helm/kind-action@v1.15.1
+        with:
+          cluster_name: incidents
+          config: k8s/kind-config.yaml
+
+      - name: Install the ingress-nginx controller
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.15.1/deploy/static/provider/kind/deploy.yaml
+          kubectl -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=180s
+          # A Ready controller pod can still refuse webhook calls for a few seconds, so ask the webhook itself.
+          for i in $(seq 1 60); do
+            kubectl create ingress webhook-probe --class=nginx --rule="probe.localhost/*=probe:80" \
+              --dry-run=server -n default -o name && break
+            sleep 2
+          done
+
+      - name: Namespace and GHCR pull secret
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl -n incidents create secret docker-registry ghcr-pull \
+            --docker-server=ghcr.io \
+            --docker-username="${{ github.actor }}" \
+            --docker-password="${{ secrets.GITHUB_TOKEN }}"
+
+      - name: helm upgrade --install with the pushed SHA tags
+        run: |
+          helm upgrade --install incidents helm/incidents -n incidents \
+            --set backend.tag=${{ github.sha }} \
+            --set frontend.tag=${{ github.sha }} \
+            --set config.environment=ci \
+            --set "imagePullSecrets[0].name=ghcr-pull" \
+            --wait --timeout 5m
+          helm list -n incidents
+          kubectl -n incidents get deploy,pods,svc,ingress,hpa,pvc -o wide
+
+      - name: Smoke test through the Ingress
+        run: |
+          base=http://incidents.localhost:18220
+          for i in $(seq 1 30); do curl -fsS $base/api/info && break; sleep 2; done
+          echo
+          curl -fsS $base/api/info | jq -e --arg sha "${{ github.sha }}" '.version == $sha'
+          id=$(curl -fsS -X POST $base/api/incidents -H 'Content-Type: application/json' \
+            -d '{"title":"CI smoke test for ${{ github.sha }}","service":"ci","severity":"SEV4"}' | jq -r .id)
+          curl -fsS -X POST $base/api/incidents/$id/notes -H 'Content-Type: application/json' -d '{"body":"deployed by run ${{ github.run_id }}"}' > /dev/null
+          curl -fsS -X POST $base/api/incidents/$id/status -H 'Content-Type: application/json' -d '{"status":"resolved"}' \
+            | jq -e '.status == "resolved" and .resolved_at != null and (.notes | length) == 3'
+          curl -fsS $base/api/stats | jq -c .
+          curl -fsS $base/ | grep -o '<title>.*</title>'
+          helm test incidents -n incidents --logs
