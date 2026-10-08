@@ -1,0 +1,213 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 760" width="1120" height="760" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12">
+  <title>Incident Tracker architecture: CI/CD to GHCR, GitOps with ArgoCD into a kind cluster, monitoring, and Terraform on AWS</title>
+  <style>
+    .bg { fill: #ffffff; }
+    .t { fill: #0f172a; }
+    .m { fill: #64748b; }
+    .h { fill: #0f172a; font-weight: 600; font-size: 13px; }
+    .zone { fill: #f8fafc; stroke: #94a3b8; stroke-width: 1.2; }
+    .box { fill: #ffffff; stroke: #475569; stroke-width: 1.2; }
+    .ci { fill: #eff6ff; stroke: #2563eb; stroke-width: 1.2; }
+    .sec { fill: #fef2f2; stroke: #dc2626; stroke-width: 1.2; }
+    .k8s { fill: #ecfdf5; stroke: #059669; stroke-width: 1.2; }
+    .mon { fill: #fff7ed; stroke: #ea580c; stroke-width: 1.2; }
+    .git { fill: #f5f3ff; stroke: #7c3aed; stroke-width: 1.2; }
+    .line { stroke: #475569; fill: none; stroke-width: 1.4; }
+    .dash { stroke: #7c3aed; fill: none; stroke-width: 1.4; stroke-dasharray: 5 4; }
+    .scrape { stroke: #ea580c; fill: none; stroke-width: 1.4; stroke-dasharray: 3 3; }
+    .head { fill: #475569; }
+    .vhead { fill: #7c3aed; }
+    .ohead { fill: #ea580c; }
+    .vt { fill: #6d28d9; }
+    .ot { fill: #c2410c; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .t, .h { fill: #e6edf3; }
+      .m { fill: #8b949e; }
+      .zone { fill: #161b22; stroke: #30363d; }
+      .box { fill: #0d1117; stroke: #8b949e; }
+      .ci { fill: #0c2d6b; stroke: #58a6ff; }
+      .sec { fill: #3d1214; stroke: #f85149; }
+      .k8s { fill: #0f2e1f; stroke: #3fb950; }
+      .mon { fill: #3d2410; stroke: #f0883e; }
+      .git { fill: #271a45; stroke: #a371f7; }
+      .line { stroke: #8b949e; }
+      .head { fill: #8b949e; }
+      .dash { stroke: #a371f7; }
+      .vhead { fill: #a371f7; }
+      .vt { fill: #d2a8ff; }
+      .scrape { stroke: #f0883e; }
+      .ohead { fill: #f0883e; }
+      .ot { fill: #ffa657; }
+    }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="vhead" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ohead" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+  <rect class="bg" width="1120" height="760"/>
+
+  <!-- Row 1: CI/CD -->
+  <text class="h" x="24" y="30">1. CI/CD on GitHub Actions (every push to main and every pull request)</text>
+  <rect class="box" x="24" y="48" width="110" height="64" rx="8"/>
+  <text class="t" x="79" y="76" text-anchor="middle">Developer</text>
+  <text class="m" x="79" y="94" text-anchor="middle">git push main</text>
+
+  <rect class="git" x="164" y="48" width="130" height="64" rx="8"/>
+  <text class="t" x="229" y="72" text-anchor="middle">GitHub</text>
+  <text class="m" x="229" y="88" text-anchor="middle">Zingzy/incident-tracker</text>
+  <text class="m" x="229" y="102" text-anchor="middle">branch main</text>
+
+  <rect class="zone" x="324" y="40" width="560" height="140" rx="10"/>
+  <text class="m" x="336" y="58">workflow .github/workflows/ci.yml</text>
+  <rect class="ci" x="336" y="68" width="120" height="44" rx="6"/>
+  <text class="t" x="396" y="86" text-anchor="middle">pytest (15 tests)</text>
+  <text class="m" x="396" y="102" text-anchor="middle">vite build</text>
+  <rect class="sec" x="470" y="68" width="120" height="44" rx="6"/>
+  <text class="t" x="530" y="86" text-anchor="middle">Bandit, pip-audit</text>
+  <text class="m" x="530" y="102" text-anchor="middle">npm audit, gitleaks</text>
+  <rect class="ci" x="604" y="68" width="120" height="44" rx="6"/>
+  <text class="t" x="664" y="86" text-anchor="middle">docker build x2</text>
+  <text class="m" x="664" y="102" text-anchor="middle">tag = commit SHA</text>
+  <rect class="sec" x="738" y="68" width="132" height="44" rx="6"/>
+  <text class="t" x="804" y="86" text-anchor="middle">Trivy, both images</text>
+  <text class="m" x="804" y="102" text-anchor="middle">HIGH and CRITICAL</text>
+  <rect class="sec" x="470" y="124" width="254" height="44" rx="6"/>
+  <text class="t" x="597" y="142" text-anchor="middle">security gate</text>
+  <text class="m" x="597" y="158" text-anchor="middle">any finding or failed scanner blocks the push</text>
+  <rect class="k8s" x="738" y="124" width="132" height="44" rx="6"/>
+  <text class="t" x="804" y="142" text-anchor="middle">kind in the runner</text>
+  <text class="m" x="804" y="158" text-anchor="middle">helm install, smoke test</text>
+  <path class="line" d="M456 90H468" marker-end="url(#a)"/>
+  <path class="line" d="M590 90H602" marker-end="url(#a)"/>
+  <path class="line" d="M724 90H736" marker-end="url(#a)"/>
+  <path class="line" d="M804 112V118H597V122" marker-end="url(#a)"/>
+
+  <rect class="ci" x="914" y="48" width="182" height="64" rx="8"/>
+  <text class="t" x="1005" y="70" text-anchor="middle">GHCR, tag = commit SHA</text>
+  <text class="m" x="1005" y="86" text-anchor="middle">incident-tracker-backend</text>
+  <text class="m" x="1005" y="101" text-anchor="middle">incident-tracker-frontend</text>
+
+  <path class="line" d="M134 80H162" marker-end="url(#a)"/>
+  <path class="line" d="M294 80H322" marker-end="url(#a)"/>
+  <path class="line" d="M724 146H732" marker-end="url(#a)"/>
+  <path class="line" d="M597 168V190H1005V114" marker-end="url(#a)"/>
+  <text class="m" x="860" y="204">push only after the gate</text>
+
+  <!-- Row 2: GitOps and the kind cluster -->
+  <text class="h" x="24" y="214">2. GitOps into the local kind cluster incidents (Kubernetes v1.37, one node)</text>
+  <rect class="git" x="24" y="234" width="180" height="78" rx="8"/>
+  <text class="t" x="114" y="256" text-anchor="middle">gitops/incidents-kind</text>
+  <text class="m" x="114" y="272" text-anchor="middle">wraps helm/incidents</text>
+  <text class="m" x="114" y="288" text-anchor="middle">values.yaml: image tag,</text>
+  <text class="m" x="114" y="302" text-anchor="middle">environment</text>
+  <path class="dash" d="M229 112V124H12V273H22" marker-end="url(#v)"/>
+
+  <rect class="zone" x="234" y="226" width="862" height="330" rx="10"/>
+  <text class="m" x="246" y="244">kind cluster incidents, host ports 18220 (http) and 18221 (https)</text>
+
+  <rect class="git" x="246" y="256" width="150" height="64" rx="8"/>
+  <text class="t" x="321" y="278" text-anchor="middle">ArgoCD</text>
+  <text class="m" x="321" y="294" text-anchor="middle">auto sync, prune,</text>
+  <text class="m" x="321" y="308" text-anchor="middle">self heal</text>
+  <path class="dash" d="M204 272H244" marker-end="url(#v)"/>
+  <text class="vt" x="207" y="264">polls</text>
+
+  <rect class="box" x="246" y="356" width="150" height="56" rx="8"/>
+  <text class="t" x="321" y="378" text-anchor="middle">ingress-nginx</text>
+  <text class="m" x="321" y="396" text-anchor="middle">incidents.localhost</text>
+
+  <rect class="zone" x="424" y="256" width="460" height="290" rx="8"/>
+  <text class="m" x="436" y="274">namespace incidents</text>
+  <path class="dash" d="M396 290H422" marker-end="url(#v)"/>
+
+  <rect class="k8s" x="436" y="286" width="200" height="64" rx="6"/>
+  <text class="t" x="536" y="306" text-anchor="middle">frontend Deployment, 2 pods</text>
+  <text class="m" x="536" y="322" text-anchor="middle">nginx unprivileged, React build</text>
+  <text class="m" x="536" y="338" text-anchor="middle">Service :80, probe /healthz</text>
+
+  <rect class="k8s" x="436" y="372" width="200" height="78" rx="6"/>
+  <text class="t" x="536" y="392" text-anchor="middle">backend Deployment, 2 to 5 pods</text>
+  <text class="m" x="536" y="408" text-anchor="middle">FastAPI, Alembic on start</text>
+  <text class="m" x="536" y="424" text-anchor="middle">probes /health and /ready</text>
+  <text class="m" x="536" y="440" text-anchor="middle">Service :8000, /metrics</text>
+
+  <rect class="k8s" x="664" y="372" width="206" height="78" rx="6"/>
+  <text class="t" x="767" y="392" text-anchor="middle">postgres StatefulSet</text>
+  <text class="m" x="767" y="408" text-anchor="middle">postgres:17-alpine</text>
+  <text class="m" x="767" y="424" text-anchor="middle">PVC data-incidents-postgres-0</text>
+  <text class="m" x="767" y="440" text-anchor="middle">Service :5432</text>
+
+  <rect class="box" x="664" y="286" width="98" height="64" rx="6"/>
+  <text class="t" x="713" y="312" text-anchor="middle">ConfigMap</text>
+  <text class="m" x="713" y="330" text-anchor="middle">env, title</text>
+  <rect class="box" x="772" y="286" width="98" height="64" rx="6"/>
+  <text class="t" x="821" y="312" text-anchor="middle">Secret</text>
+  <text class="m" x="821" y="330" text-anchor="middle">DATABASE_URL</text>
+
+  <rect class="box" x="436" y="470" width="200" height="62" rx="6"/>
+  <text class="t" x="536" y="494" text-anchor="middle">HPA, CPU 70 percent</text>
+  <text class="m" x="536" y="512" text-anchor="middle">metrics-server</text>
+  <rect class="box" x="664" y="470" width="206" height="62" rx="6"/>
+  <text class="t" x="767" y="494" text-anchor="middle">ServiceMonitor</text>
+  <text class="m" x="767" y="512" text-anchor="middle">plus Grafana dashboard ConfigMap</text>
+
+  <path class="line" d="M396 372H416V318H434" marker-end="url(#a)"/>
+  <path class="line" d="M396 396H434" marker-end="url(#a)"/>
+  <text class="m" x="400" y="364">/</text>
+  <text class="m" x="400" y="426">/api</text>
+  <path class="line" d="M636 411H662" marker-end="url(#a)"/>
+  <path class="line" d="M713 350V360H600V370" marker-end="url(#a)"/>
+  <path class="line" d="M536 470V452" marker-end="url(#a)"/>
+
+  <rect class="zone" x="896" y="256" width="188" height="290" rx="8"/>
+  <text class="m" x="908" y="274">namespace monitoring</text>
+  <rect class="mon" x="908" y="300" width="164" height="70" rx="6"/>
+  <text class="t" x="990" y="322" text-anchor="middle">Prometheus</text>
+  <text class="m" x="990" y="338" text-anchor="middle">kube-prometheus-stack</text>
+  <text class="m" x="990" y="354" text-anchor="middle">6h retention</text>
+  <rect class="mon" x="908" y="400" width="164" height="56" rx="6"/>
+  <text class="t" x="990" y="422" text-anchor="middle">Grafana</text>
+  <text class="m" x="990" y="440" text-anchor="middle">overview dashboard</text>
+  <path class="line" d="M990 370V398" marker-end="url(#a)"/>
+  <path class="scrape" d="M870 500H890V340H906" marker-end="url(#o)"/>
+  <text class="ot" x="892" y="490">scrape 15s</text>
+
+  <rect class="box" x="24" y="356" width="180" height="56" rx="8"/>
+  <text class="t" x="114" y="378" text-anchor="middle">Browser</text>
+  <text class="m" x="114" y="396" text-anchor="middle">incidents.localhost:18220</text>
+  <path class="line" d="M204 384H244" marker-end="url(#a)"/>
+
+  <rect class="ci" x="24" y="440" width="180" height="56" rx="8"/>
+  <text class="t" x="114" y="462" text-anchor="middle">pull from GHCR</text>
+  <text class="m" x="114" y="480" text-anchor="middle">public packages</text>
+  <path class="line" d="M1096 80H1108V566H114V498" marker-end="url(#a)"/>
+  <path class="line" d="M204 468H420V450H434" marker-end="url(#a)"/>
+
+  <!-- Row 3: Terraform -->
+  <text class="h" x="24" y="598">3. Terraform on AWS (applied, verified with kubectl, then destroyed)</text>
+  <rect class="box" x="24" y="616" width="150" height="70" rx="8"/>
+  <text class="t" x="99" y="640" text-anchor="middle">terraform/</text>
+  <text class="m" x="99" y="656" text-anchor="middle">aws provider 6.67</text>
+  <text class="m" x="99" y="672" text-anchor="middle">33 resources</text>
+  <path class="line" d="M174 651H202" marker-end="url(#a)"/>
+
+  <rect class="zone" x="204" y="608" width="892" height="130" rx="10"/>
+  <text class="m" x="216" y="626">region ap-south-1, every name starts with incident-tracker-</text>
+  <rect class="ci" x="216" y="636" width="340" height="90" rx="6"/>
+  <text class="t" x="386" y="656" text-anchor="middle">VPC 10.21.0.0/16</text>
+  <text class="m" x="386" y="674" text-anchor="middle">2 public subnets, 2 private subnets, 2 AZs</text>
+  <text class="m" x="386" y="690" text-anchor="middle">internet gateway, 1 NAT gateway, route tables</text>
+  <text class="m" x="386" y="706" text-anchor="middle">EKS cluster security group plus API rule</text>
+  <rect class="k8s" x="570" y="636" width="200" height="90" rx="6"/>
+  <text class="t" x="670" y="656" text-anchor="middle">EKS incident-tracker-eks 1.37</text>
+  <text class="m" x="670" y="674" text-anchor="middle">managed nodes, private subnets</text>
+  <text class="m" x="670" y="690" text-anchor="middle">t3.small, 1 to 2 nodes</text>
+  <text class="m" x="670" y="706" text-anchor="middle">IAM roles, API and audit logs</text>
+  <rect class="box" x="784" y="636" width="300" height="90" rx="6"/>
+  <text class="t" x="934" y="656" text-anchor="middle">ECR incident-tracker/backend, /frontend</text>
+  <text class="m" x="934" y="674" text-anchor="middle">immutable tags, scan on push</text>
+  <text class="t" x="934" y="696" text-anchor="middle">S3 incident-tracker-backups-4a3526</text>
+  <text class="m" x="934" y="714" text-anchor="middle">versioned, encrypted, no public access</text>
+</svg>
