@@ -1,0 +1,66 @@
+# kube-prometheus-stack 92.0.0 trimmed to fit a single-node kind cluster with about 4 GB shared memory.
+fullnameOverride: kps
+
+defaultRules:
+  create: true
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeProxy: false
+
+# kind does not expose these control plane endpoints to the pod network, so their targets would only ever show DOWN.
+kubeEtcd: {enabled: false}
+kubeControllerManager: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeProxy: {enabled: false}
+
+alertmanager:
+  alertmanagerSpec:
+    replicas: 1
+    retention: 12h
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {memory: 64Mi}
+
+prometheus:
+  prometheusSpec:
+    retention: 6h
+    retentionSize: 512MB
+    scrapeInterval: 15s
+    # Pick up ServiceMonitors from every namespace, not only ones labelled for this release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 768Mi}
+
+prometheusOperator:
+  resources:
+    requests: {cpu: 20m, memory: 48Mi}
+    limits: {memory: 128Mi}
+
+kube-state-metrics:
+  resources:
+    requests: {cpu: 10m, memory: 32Mi}
+    limits: {memory: 96Mi}
+
+prometheus-node-exporter:
+  resources:
+    requests: {cpu: 10m, memory: 16Mi}
+    limits: {memory: 48Mi}
+
+grafana:
+  defaultDashboardsEnabled: false
+  persistence: {enabled: false}
+  # 256Mi and then 448Mi were both OOMKilled while a 10 panel dashboard loaded.
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+    limits: {memory: 640Mi}
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
