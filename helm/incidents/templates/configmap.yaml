@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "incidents.fullname" . }}-config
+  labels:
+    {{- include "incidents.labels" . | nindent 4 }}
+data:
+  ENVIRONMENT: {{ .Values.config.environment | quote }}
+  SITE_TITLE: {{ .Values.config.siteTitle | quote }}
+  APP_VERSION: {{ .Values.backend.tag | quote }}

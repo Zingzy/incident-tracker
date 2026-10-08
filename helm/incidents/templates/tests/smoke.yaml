@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "incidents.fullname" . }}-smoke
+  labels:
+    {{- include "incidents.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  restartPolicy: Never
+  containers:
+    - name: smoke
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          wget -qO- http://{{ include "incidents.fullname" . }}-backend:{{ .Values.backend.port }}/ready
+          echo
+          wget -qO- http://{{ include "incidents.fullname" . }}-frontend/api/info
+          echo
+          wget -qO- http://{{ include "incidents.fullname" . }}-frontend/ | grep -o '<title>.*</title>'
+      resources:
+        requests: {cpu: 10m, memory: 8Mi}
+        limits: {cpu: 100m, memory: 32Mi}
