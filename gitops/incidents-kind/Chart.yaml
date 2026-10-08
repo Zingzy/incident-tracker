@@ -1,0 +1,9 @@
+apiVersion: v2
+name: incidents-kind
+description: What ArgoCD deploys to the local kind cluster. The app chart plus the values for this environment.
+type: application
+version: 1.0.0
+dependencies:
+  - name: incidents
+    version: 1.0.0
+    repository: file://../../helm/incidents

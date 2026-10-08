@@ -1,0 +1,11 @@
+# The desired state of the local kind cluster. Change a value here, push to main, and ArgoCD applies it.
+incidents:
+  backend:
+    tag: local
+  frontend:
+    tag: local
+  config:
+    environment: kind-gitops
+    siteTitle: Incident Tracker
+  ingress:
+    host: incidents.localhost
