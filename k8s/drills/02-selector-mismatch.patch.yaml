@@ -1,0 +1,4 @@
+# Drill 2: the Service selects a component label no pod has. Apply with kubectl patch --type merge.
+spec:
+  selector:
+    app.kubernetes.io/component: api

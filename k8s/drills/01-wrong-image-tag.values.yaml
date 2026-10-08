@@ -1,0 +1,3 @@
+# Drill 1: a tag that was never pushed. Apply with helm upgrade --reuse-values -f.
+backend:
+  tag: 1.0.0-does-not-exist

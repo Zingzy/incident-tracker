@@ -1,0 +1,3 @@
+# Drill 4: the readiness probe asks for a path the API does not serve.
+backend:
+  readinessPath: /readyz

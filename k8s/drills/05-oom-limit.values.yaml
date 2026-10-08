@@ -1,0 +1,5 @@
+# Drill 5: a memory limit below what Python, FastAPI and SQLAlchemy need to start.
+backend:
+  resources:
+    requests: {cpu: 50m, memory: 24Mi}
+    limits: {cpu: 500m, memory: 24Mi}
