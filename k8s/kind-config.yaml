@@ -1,0 +1,14 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: incidents
+nodes:
+  - role: control-plane
+    labels:
+      ingress-ready: "true"
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 18220
+        listenAddress: 127.0.0.1
+      - containerPort: 443
+        hostPort: 18221
+        listenAddress: 127.0.0.1
