@@ -1,0 +1,6 @@
+scan:
+  scanners: [vuln, secret]
+severity: [HIGH, CRITICAL]
+vulnerability:
+  ignore-unfixed: false
+exit-code: 0

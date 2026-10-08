@@ -1,0 +1,10 @@
+title = "Incident Tracker secret scan"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Python base images set GPG_KEY to the public fingerprint of the CPython release signing key"
+targetRules = ["generic-api-key"]
+regexTarget = "line"
+regexes = ['''GPG_KEY=[0-9A-F]{40}\b''']
