@@ -379,6 +379,14 @@ true on the day it ran, which is why it runs on every push. The gitleaks config
 allowlists one pattern: the public CPython release key fingerprint that Python
 base images set in `GPG_KEY`.
 
+That happened three days later. The run for `125f71a` found CVE-2026-4775, a
+HIGH severity bug in libtiff (`tiff 4.7.1-r0`) that a crafted TIFF file can use
+for code execution or a crash. It was not in our code. It came with the
+`nginx-unprivileged:1.30-alpine` base of the frontend image, and Alpine had
+already shipped the fix in `4.7.2-r0`. The gate blocked the push and the
+deploy. The frontend Dockerfile now runs `apk upgrade` in the runtime stage and
+switches back to uid 101, and the next scan was clean.
+
 ## Monitoring
 
 `monitoring/kube-prometheus-stack-values.yaml` trims the stack for a small
