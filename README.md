@@ -12,7 +12,7 @@ cluster called `incidents` (Kubernetes v1.37.0), GitHub Actions on this
 repository, and a real AWS account in `ap-south-1` that was applied, checked
 and destroyed in one sitting. The AWS account ID is shown as `<account-id>`.
 
-![The app through the Ingress, build f60f610 deployed by Argo CD](docs/screenshots/01-app.png)
+![The app through the Ingress at incidents.localhost](docs/screenshots/01-app.png)
 
 ## Overview
 
@@ -269,6 +269,14 @@ it.
 
 ![apply timings, masked outputs, the EKS node Ready and the frontend pod](docs/screenshots/04-terraform-apply-eks.png)
 
+The same stack in the AWS Console, in Asia Pacific (Mumbai):
+
+![The VPC in the AWS Console](docs/screenshots/18-aws-console-vpc.png)
+
+![The two public and two private subnets](docs/screenshots/19-aws-console-subnets.png)
+
+![The EKS cluster Active with one node group](docs/screenshots/20-aws-console-eks.png)
+
 ```bash
 terraform destroy
 ```
@@ -387,6 +395,8 @@ already shipped the fix in `4.7.2-r0`. The gate blocked the push and the
 deploy. The frontend Dockerfile now runs `apk upgrade` in the runtime stage and
 switches back to uid 101, and the next scan was clean.
 
+![The security gate blocking the push on the Trivy finding](docs/screenshots/16-ci-security-gate-trivy.png)
+
 ## Monitoring
 
 `monitoring/kube-prometheus-stack-values.yaml` trims the stack for a small
@@ -415,6 +425,8 @@ All five backend pods were scraped while the HPA had them scaled out. The
 reports the same number and the dashboard uses `max()`, not `sum()`.
 
 ![curl /metrics on the backend](docs/screenshots/13-metrics-curl.png)
+
+![Prometheus Targets, both backend pods UP](docs/screenshots/17-prometheus-targets.png)
 
 ![Grafana: incidents by severity, open incidents, time to resolve, request rate, latency, HPA replicas](docs/screenshots/08-grafana-dashboard.png)
 
@@ -550,7 +562,7 @@ Verify: `successfully rolled out`, `HTTP 200`.
 
 | File | What it shows |
 |---|---|
-| [01-app.png](docs/screenshots/01-app.png) | The app through the Ingress after the GitOps promotion |
+| [01-app.png](docs/screenshots/01-app.png) | The app through the Ingress at incidents.localhost |
 | [02-tests-and-compose.png](docs/screenshots/02-tests-and-compose.png) | 15 tests passing, Compose running, non-root containers |
 | [03-helm-and-kubectl.png](docs/screenshots/03-helm-and-kubectl.png) | `helm list`, pods, Services, Ingress, HPA, PVC, metrics |
 | [04-terraform-apply-eks.png](docs/screenshots/04-terraform-apply-eks.png) | Terraform apply on AWS and a pod running on the EKS node |
@@ -564,6 +576,12 @@ Verify: `successfully rolled out`, `HTTP 200`.
 | [12-pytest.png](docs/screenshots/12-pytest.png) | `pytest -v`, 15 passed |
 | [13-metrics-curl.png](docs/screenshots/13-metrics-curl.png) | `curl /metrics` on the backend |
 | [14-terraform-plan.png](docs/screenshots/14-terraform-plan.png) | `terraform init` and `terraform plan` |
+| [15-commit-history.png](docs/screenshots/15-commit-history.png) | Commit history on GitHub |
+| [16-ci-security-gate-trivy.png](docs/screenshots/16-ci-security-gate-trivy.png) | The security gate blocking a push on a Trivy HIGH finding |
+| [17-prometheus-targets.png](docs/screenshots/17-prometheus-targets.png) | Prometheus Targets, both backend pods UP |
+| [18-aws-console-vpc.png](docs/screenshots/18-aws-console-vpc.png) | The VPC in the AWS Console |
+| [19-aws-console-subnets.png](docs/screenshots/19-aws-console-subnets.png) | Two public and two private subnets in the AWS Console |
+| [20-aws-console-eks.png](docs/screenshots/20-aws-console-eks.png) | The EKS cluster Active with one node group |
 
 ## Lessons learned
 
