@@ -10,7 +10,11 @@ for the AWS version (VPC, EKS, ECR, S3).
 Everything below was run for real: Docker Desktop on a Mac, a single node kind
 cluster called `incidents` (Kubernetes v1.37.0), GitHub Actions on this
 repository, and a real AWS account in `ap-south-1` that was applied, checked
-and destroyed in one sitting. The AWS account ID is shown as `<account-id>`.
+and destroyed in one sitting. The AWS account ID is shown as `<account-id>`
+in terminal output and blurred in the console screenshots.
+
+The [capstone report](docs/capstone-report.pdf) (PDF) walks through each
+grading module with the evidence and screenshots for every criterion.
 
 ![The app through the Ingress at incidents.localhost](docs/screenshots/01-app.png)
 
