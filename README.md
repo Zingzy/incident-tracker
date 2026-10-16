@@ -248,7 +248,7 @@ The apply ran from 21:35:04 to 21:45:34, mostly the EKS control plane.
 ```bash
 aws eks update-kubeconfig --region ap-south-1 --name incident-tracker-eks --kubeconfig ./eks.kubeconfig
 kubectl get nodes -o wide
-kubectl create deployment incidents-frontend --image=ghcr.io/zingzy/incident-tracker-frontend:f60f610a12d52e55879b917079cf880f83c816fd --port=8080
+kubectl create deployment incidents-frontend --image=ghcr.io/zingzy/incident-tracker-frontend:<commit-sha> --port=8080
 kubectl set env deployment/incidents-frontend BACKEND_HOST=kubernetes.default.svc.cluster.local
 kubectl get pods -o wide
 ```
@@ -335,16 +335,16 @@ the ingress-nginx Deployment and then retries a server-side dry run of a
 throwaway Ingress until the admission webhook accepts it, because a Ready
 controller pod can still refuse webhook calls for a moment.
 
-Run [37644792039](https://github.com/Zingzy/incident-tracker/actions/runs/37644792039)
-on `f60f610` passed all 10 jobs on the first push:
+Run [38911274910](https://github.com/Zingzy/incident-tracker/actions/runs/38911274910)
+on `8249029` passed all 10 jobs:
 
 ```
-pushed ghcr.io/zingzy/incident-tracker-backend@sha256:35f21f0716f9329457ba2a5789237e1e3c7254114ea773917845d7f8bdc7533e
-pushed ghcr.io/zingzy/incident-tracker-frontend@sha256:1130d0635dd4e3af9056f1076a26756fb0a1474898b6aa3470c5a4e8b922aea8
-{"site_title":"Incident Tracker","environment":"ci","version":"f60f610a12d52e55879b917079cf880f83c816fd"}
+pushed ghcr.io/zingzy/incident-tracker-backend@sha256:a3446c49d827f8ed75b401a21136eac6cf78fb6d5b7bf5996cde528bde34b54d
+pushed ghcr.io/zingzy/incident-tracker-frontend@sha256:b5993e6dd53a7c5cf54cbb364e904fe6e25ef672c28bd3b7950b325821533443
+{"site_title":"Incident Tracker","environment":"ci","version":"82490290033c676d9d492f9c227429dfbaf532fa"}
 true
 true
-{"open":0,"open_by_severity":{"SEV1":0,"SEV2":0,"SEV3":0,"SEV4":0},"resolved":1,"mean_time_to_resolve_seconds":0.025653}
+{"open":0,"open_by_severity":{"SEV1":0,"SEV2":0,"SEV3":0,"SEV4":0},"resolved":1,"mean_time_to_resolve_seconds":0.042428}
 <title>Incident Tracker</title>
 ```
 
@@ -445,24 +445,27 @@ helm upgrade --install argocd ./argo-cd-10.9.6.tgz -n argocd --create-namespace 
 kubectl apply -f gitops/application.yaml
 ```
 
-The promotion: commit `a03b9ce` (21:33:58) changed only the image tags in
-`values.yaml` from `local` to `f60f610...`, the SHA CI had built, scanned and
+The promotion: commit `8703b67` (pushed 20:20:58) changed only the image tags in
+`values.yaml` from `local` to `82490290...`, the SHA CI had built, scanned and
 pushed. No kubectl. Every 10 seconds:
 
 ```
-21:35:21 argo=f60f610 Synced/Healthy api={"site_title":"Incident Tracker","environment":"kind-gitops","version":"local"}
-21:35:31 argo=a03b9ce Synced/Progressing api={"site_title":"Incident Tracker","environment":"kind-gitops","version":"local"}
+20:21:02 argo=dffd3e9 Synced/Healthy api={"site_title":"Incident Tracker","environment":"kind-gitops","version":"local"}
 ...
-21:36:13 argo=a03b9ce Synced/Progressing api={"site_title":"Incident Tracker","environment":"kind-gitops","version":"f60f610a12d52e55879b917079cf880f83c816fd"}
-21:36:24 argo=a03b9ce Synced/Progressing api={"site_title":"Incident Tracker","environment":"kind-gitops","version":"local"}
-21:36:34 argo=a03b9ce Synced/Healthy api={"site_title":"Incident Tracker","environment":"kind-gitops","version":"f60f610a12d52e55879b917079cf880f83c816fd"}
+20:22:43 argo=dffd3e9 Synced/Healthy api={"site_title":"Incident Tracker","environment":"kind-gitops","version":"local"}
+20:22:53 argo=8703b67 Synced/Progressing api={"site_title":"Incident Tracker","environment":"kind-gitops","version":"local"}
+...
+20:23:24 argo=8703b67 Synced/Progressing api={"site_title":"Incident Tracker","environment":"kind-gitops","version":"82490290033c676d9d492f9c227429dfbaf532fa"}
+20:23:34 argo=8703b67 Synced/Degraded api={"site_title":"Incident Tracker","environment":"kind-gitops","version":"82490290033c676d9d492f9c227429dfbaf532fa"}
+20:23:44 argo=8703b67 Synced/Degraded api={"site_title":"Incident Tracker","environment":"kind-gitops","version":"82490290033c676d9d492f9c227429dfbaf532fa"}
+20:23:54 argo=8703b67 Synced/Healthy api={"site_title":"Incident Tracker","environment":"kind-gitops","version":"82490290033c676d9d492f9c227429dfbaf532fa"}
 ```
 
-Argo CD picked the commit up about 90 seconds after it was made. During the rolling update
-the answers flip between old and new pods, and from 21:36:34 every pod runs the
-new build.
+Argo CD picked the commit up about two minutes after the push. For 20 seconds
+the app showed `Degraded` while the new pods started, and from 20:23:54 every
+pod runs the new build.
 
-![Argo CD Synced and Healthy at a03b9ce](docs/screenshots/09-argocd-synced.png)
+![Argo CD Synced and Healthy at 8703b67](docs/screenshots/09-argocd-synced.png)
 
 Self heal: I scaled the frontend to 1 by hand, and Argo CD put it back to 2.
 
