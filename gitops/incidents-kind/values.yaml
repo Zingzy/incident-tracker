@@ -9,3 +9,8 @@ incidents:
     siteTitle: Incident Tracker
   ingress:
     host: incidents.localhost
+  monitoring:
+    serviceMonitor:
+      enabled: true
+    grafanaDashboard:
+      enabled: true
