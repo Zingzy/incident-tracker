@@ -1,9 +1,9 @@
 # The desired state of the local kind cluster. Change a value here, push to main, and ArgoCD applies it.
 incidents:
   backend:
-    tag: local
+    tag: 82490290033c676d9d492f9c227429dfbaf532fa
   frontend:
-    tag: local
+    tag: 82490290033c676d9d492f9c227429dfbaf532fa
   config:
     environment: kind-gitops
     siteTitle: Incident Tracker
